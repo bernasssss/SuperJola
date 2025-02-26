@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from PIL import Image, ImageTk
 
+# Conexão com a bases de dados
 def get_db_connection():
     try:
         conn = mysql.connector.connect(
@@ -19,8 +20,6 @@ def get_db_connection():
         print(f"Erro ao conectar ao banco de dados: {err}")
         return None
     
-# Configuração do banco de dados
-
 # Funções de CRUD para Clientes
 def adicionar_cliente(nome, telemovel, morada, email, data_nascimento):
     conn = get_db_connection()
