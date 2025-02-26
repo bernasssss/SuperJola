@@ -1,68 +1,31 @@
 import os
+import mysql.connector
 import sqlite3
 import tkinter as tk
 from tkinter import ttk, messagebox
 from PIL import Image, ImageTk
 
-# Configuração do banco de dados
-def init_db():
+def get_db_connection():
     try:
-        db_file = 'erp_vinhos.db'
-        conn = sqlite3.connect(db_file)
-        cursor = conn.cursor()
-
-        print(f"Tentando criar/abrir o banco de dados em: {os.path.abspath(db_file)}")
-
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS clientes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            telemovel INT NOT NULL,
-            morada TEXT NOT NULL,
-            email TEXT NOT NULL,
-            data_nascimento TEXT NOT NULL,
-            genero TEXT,
-            nacionalidade TEXT
+        conn = mysql.connector.connect(
+            host='projetofinalpaw-projetofinal.k.aivencloud.com',
+            port=28660,
+            user='avnadmin',
+            password='AVNS_9ObcOM992ixhN0yqF8B',
+            database='defaultdb',
         )
-        ''')
-
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS vinhos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            safra INTEGER NOT NULL,
-            preco REAL NOT NULL,
-            tipo TEXT NOT NULL,
-            pais_origem TEXT NOT NULL,
-            teor_alcoolico REAL,
-            volume_ml INTEGER
-        )
-        ''')
-
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS pedidos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            cliente_id INTEGER NOT NULL,
-            vinho_id INTEGER NOT NULL,
-            quantidade INTEGER NOT NULL,
-            total REAL NOT NULL,
-            data_pedido TEXT NOT NULL,
-            FOREIGN KEY(cliente_id) REFERENCES clientes(id),
-            FOREIGN KEY(vinho_id) REFERENCES vinhos(id)
-        )
-        ''')
-
-        conn.commit()
-        conn.close()
-        print("Banco de dados inicializado com sucesso!")
-
-    except Exception as e:
-        print(f"Erro ao criar banco de dados: {e}")
-
+        return conn
+    except mysql.connector.Error as err:
+        print(f"Erro ao conectar ao banco de dados: {err}")
+        return None
+    
+# Configuração do banco de dados
 
 # Funções de CRUD para Clientes
 def adicionar_cliente(nome, telemovel, morada, email, data_nascimento):
-    conn = sqlite3.connect('erp_vinhos.db')
+    conn = get_db_connection()
+    if conn is None:
+        return
     cursor = conn.cursor()
     cursor.execute('INSERT INTO clientes (nome, telemovel, morada, email, data_nascimento) VALUES (?, ?, ?, ?, ?)', 
                    (nome, telemovel, morada, email, data_nascimento))
@@ -70,7 +33,9 @@ def adicionar_cliente(nome, telemovel, morada, email, data_nascimento):
     conn.close()
 
 def listar_clientes():
-    conn = sqlite3.connect('erp_vinhos.db')
+    conn = get_db_connection()
+    if conn is None:
+        return []
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM clientes')
     clientes = cursor.fetchall()
@@ -79,7 +44,9 @@ def listar_clientes():
 
 # Funções de CRUD para Vinhos
 def adicionar_vinho(nome, safra, preco, tipo, pais_origem):
-    conn = sqlite3.connect('erp_vinhos.db')
+    conn = get_db_connection()
+    if conn is None:
+        return
     cursor = conn.cursor()
     cursor.execute('INSERT INTO vinhos (nome, safra, preco, tipo, pais_origem) VALUES (?, ?, ?, ?, ?)', 
                    (nome, safra, preco, tipo, pais_origem))
@@ -87,7 +54,9 @@ def adicionar_vinho(nome, safra, preco, tipo, pais_origem):
     conn.close()
 
 def listar_vinhos():
-    conn = sqlite3.connect('erp_vinhos.db')
+    conn = get_db_connection()
+    if conn is None:
+        return []
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM vinhos')
     vinhos = cursor.fetchall()
@@ -96,7 +65,9 @@ def listar_vinhos():
 
 # Função para criar pedidos
 def criar_pedido(cliente_id, vinho_id, quantidade, data_pedido):
-    conn = sqlite3.connect('erp_vinhos.db')
+    conn = get_db_connection()
+    if conn is None:
+        return
     cursor = conn.cursor()
 
     # Buscar preço do vinho
@@ -344,5 +315,4 @@ def main_window():
 
 # Inicializar banco de dados e executar o sistema
 if __name__ == "__main__":
-    init_db()
     main_window()
