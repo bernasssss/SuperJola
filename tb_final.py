@@ -147,7 +147,12 @@ def listar_pedidos():
         messagebox.showerror("Erro", "Não foi possível conectar ao banco de dados!")
         return []
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM pedidos')
+    cursor.execute('''
+        SELECT p.id, CONCAT(c.id, ' - ', c.nome), CONCAT(v.id, ' - ', v.nome), p.quantidade, p.total, p.data_pedido
+        FROM pedidos p
+        JOIN clientes c ON p.cliente_id = c.id
+        JOIN vinhos v ON p.vinho_id = v.id
+    ''')
     pedidos = cursor.fetchall()
     conn.close()
     return pedidos
@@ -233,18 +238,21 @@ def main_window():
     def adicionar_vinho_callback():
         nome = entry_vinho_nome.get()
         try:
-            safra = int(entry_vinho_safra.get())
+            safra = datetime.datetime.strptime(entry_vinho_safra.get(), '%d/%m/%Y').date()
+            if safra > datetime.date.today():
+                messagebox.showwarning("Atenção", "A safra não pode ser uma data futura!")
+                return
             preco = float(entry_vinho_preco.get())
             tipo = entry_vinho_tipo.get()
             pais_origem = entry_vinho_pais_origem.get()
-            if nome and safra > 0 and preco >= 0 and tipo and pais_origem:
+            if nome and preco >= 0 and tipo and pais_origem:
                 adicionar_vinho(nome, safra, preco, tipo, pais_origem)
                 atualizar_lista_vinhos()
                 atualizar_combobox_pedidos()
             else:
                 messagebox.showwarning("Atenção", "Preencha todos os campos corretamente!")
         except ValueError:
-            messagebox.showwarning("Atenção", "Safra e preço devem ser valores válidos!")
+            messagebox.showwarning("Atenção", "Safra deve ser uma data válida e preço deve ser um valor numérico!")
 
     def adicionar_pedido_callback():
         cliente_id = combo_pedido_cliente_id.get()
@@ -524,7 +532,7 @@ def main_window():
     entry_vinho_nome = ttk.Entry(frame_vinho_form)
     entry_vinho_nome.grid(row=0, column=1, padx=5, pady=5)
     ttk.Label(frame_vinho_form, text="Safra:").grid(row=1, column=0, padx=5, pady=5)
-    entry_vinho_safra = ttk.Entry(frame_vinho_form)
+    entry_vinho_safra = DateEntry(frame_vinho_form, date_pattern='dd/mm/yyyy')
     entry_vinho_safra.grid(row=1, column=1, padx=5, pady=5)
     ttk.Label(frame_vinho_form, text="Preço:").grid(row=2, column=0, padx=5, pady=5)
     entry_vinho_preco = ttk.Entry(frame_vinho_form)
@@ -579,25 +587,196 @@ def main_window():
     # Aba de Extração da Pipa
     tab_extracao = ttk.Frame(tab_control)
     tab_control.add(tab_extracao, text="Extração da Pipa")
-    ttk.Label(tab_extracao, text="Data de Engarrafamento:", background="#4b2e2e", foreground="#ffffff").grid(row=0, column=0, padx=5, pady=5)
-    data_engarrafamento = DateEntry(tab_extracao, date_pattern='dd/mm/yyyy')
-    data_engarrafamento.grid(row=0, column=1, padx=5, pady=5)
-    ttk.Label(tab_extracao, text="Dias para Extração:", background="#4b2e2e", foreground="#ffffff").grid(row=1, column=0, padx=5, pady=5)
-    dias_extracao = ttk.Entry(tab_extracao)
-    dias_extracao.grid(row=1, column=1, padx=5, pady=5)
+
+    frame_extracao = ttk.Frame(tab_extracao)
+    frame_extracao.pack(pady=10)
+
+    ttk.Label(frame_extracao, text="ID do Vinho:", background="#4b2e2e", foreground="#ffffff").grid(row=0, column=0, padx=5, pady=5, sticky="e")
+    combo_vinho_id_extracao = ttk.Combobox(frame_extracao)
+    combo_vinho_id_extracao['values'] = [str(vinho[0]) for vinho in listar_vinhos()]
+    combo_vinho_id_extracao.grid(row=0, column=1, padx=5, pady=5, sticky="w")
+
+    ttk.Label(frame_extracao, text="Data de Engarrafamento:", background="#4b2e2e", foreground="#ffffff").grid(row=1, column=0, padx=5, pady=5, sticky="e")
+    data_engarrafamento = DateEntry(frame_extracao, date_pattern='dd/mm/yyyy')
+    data_engarrafamento.grid(row=1, column=1, padx=5, pady=5, sticky="w")
+
+    ttk.Label(frame_extracao, text="Dias para Extração:", background="#4b2e2e", foreground="#ffffff").grid(row=2, column=0, padx=5, pady=5, sticky="e")
+    dias_extracao = ttk.Entry(frame_extracao)
+    dias_extracao.grid(row=2, column=1, padx=5, pady=5, sticky="w")
     dias_extracao.insert(0, "45")
-    ttk.Label(tab_extracao, text="Data de Extração:", background="#4b2e2e", foreground="#ffffff").grid(row=2, column=0, padx=5, pady=5)
-    label_data_extracao = ttk.Label(tab_extracao, text="", background="#4b2e2e", foreground="#ffffff")
-    label_data_extracao.grid(row=2, column=1, padx=5, pady=5)
-    # Atualiza a data de extração automaticamente quando a data ou os dias mudam
+
+    ttk.Label(frame_extracao, text="Data de Extração:", background="#4b2e2e", foreground="#ffffff").grid(row=3, column=0, padx=5, pady=5, sticky="e")
+    label_data_extracao = ttk.Label(frame_extracao, text="", background="#4b2e2e", foreground="#ffffff")
+    label_data_extracao.grid(row=3, column=1, padx=5, pady=5, sticky="w")
+
+    def calcular_extracao(event=None):
+        data_inicial = data_engarrafamento.get_date()
+        try:
+            dias = int(dias_extracao.get())
+        except ValueError:
+            dias = 45
+        data_extracao = data_inicial + datetime.timedelta(days=dias)
+        label_data_extracao.config(text=data_extracao.strftime("%d/%m/%Y"))
+
+    def salvar_extracao():
+        vinho_id = combo_vinho_id_extracao.get()
+        data_enga = data_engarrafamento.get()
+        dias_enga = dias_extracao.get()
+        data_extra = label_data_extracao.cget("text")
+        if vinho_id and data_enga and dias_enga and data_extra:
+            conn = get_db_connection()
+            if conn is None:
+                messagebox.showerror("Erro", "Não foi possível conectar ao banco de dados!")
+                return
+            cursor = conn.cursor()
+            cursor.execute(
+                'INSERT INTO extracao (vinho_id, data_enga, dias_enga, data_extra) VALUES (%s, %s, %s, %s)',
+                (vinho_id, data_enga, dias_enga, data_extra)
+            )
+            conn.commit()
+            conn.close()
+            messagebox.showinfo("Sucesso", "Extração salva com sucesso!")
+            atualizar_lista_extracoes()
+        else:
+            messagebox.showwarning("Atenção", "Preencha todos os campos!")
+
+    ttk.Button(frame_extracao, text="Salvar Extração", command=salvar_extracao).grid(row=4, column=0, columnspan=2, pady=10)
+
     data_engarrafamento.bind("<<DateEntrySelected>>", calcular_extracao)
     dias_extracao.bind("<KeyRelease>", calcular_extracao)
     calcular_extracao()  # cálculo inicial
 
+    # Tabela de Extrações
+    tree_extracoes = ttk.Treeview(tab_extracao, columns=("ID", "ID do Vinho", "Data de Engarrafamento", "Dias para Extração", "Data de Extração"), show="headings")
+    tree_extracoes.heading("ID", text="ID")
+    tree_extracoes.heading("ID do Vinho", text="ID do Vinho")
+    tree_extracoes.heading("Data de Engarrafamento", text="Data de Engarrafamento")
+    tree_extracoes.heading("Dias para Extração", text="Dias para Extração")
+    tree_extracoes.heading("Data de Extração", text="Data de Extração")
+    tree_extracoes.pack(fill=tk.BOTH, expand=True)
+
+    def listar_extracoes():
+        conn = get_db_connection()
+        if conn is None:
+            messagebox.showerror("Erro", "Não foi possível conectar à base de dados!")
+            return []
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT e.id, v.nome, e.data_enga, e.dias_enga, e.data_extra
+            FROM extracao e
+            JOIN vinhos v ON e.vinho_id = v.id
+        ''')
+        extracoes = cursor.fetchall()
+        conn.close()
+        return extracoes
+
+    def atualizar_lista_extracoes():
+        for item in tree_extracoes.get_children():
+            tree_extracoes.delete(item)
+        for extracao in listar_extracoes():
+            #print("Carregando extração:", extracao)  # Depuração
+            # Formatar as datas para exibição
+            extracao_formatada = (
+                extracao[0],
+                extracao[1],
+                extracao[2],
+                extracao[3],
+                extracao[4]
+            )
+            tree_extracoes.insert('', 'end', values=extracao_formatada)
+
+    def remover_extracao_callback():
+        selecionado = tree_extracoes.selection()
+        if not selecionado:
+            messagebox.showwarning("Atenção", "Selecione uma extração para remover!")
+            return
+        extracao_id = tree_extracoes.item(selecionado[0])["values"][0]
+        if messagebox.askyesno("Confirmação", "Tem certeza que deseja remover esta extração?"):
+            conn = get_db_connection()
+            if conn is None:
+                messagebox.showerror("Erro", "Não foi possível conectar ao banco de dados!")
+                return
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM extracao WHERE id = %s", (extracao_id,))
+            conn.commit()
+            conn.close()
+            atualizar_lista_extracoes()
+            messagebox.showinfo("Sucesso", "Extração removida com sucesso!")
+
+    def editar_extracao_callback():
+        selecionado = tree_extracoes.selection()
+        if not selecionado:
+            messagebox.showwarning("Atenção", "Selecione uma extração para editar!")
+            return
+        extracao = tree_extracoes.item(selecionado[0])["values"]
+        extracao_id = extracao[0]
+        edit_window = tk.Toplevel(app)
+        edit_window.title("Editar Extração")
+        edit_window.configure(bg="#4b2e2e")
+        ttk.Label(edit_window, text="ID do Vinho:", background="#4b2e2e").grid(row=0, column=0, padx=5, pady=5)
+        combo_vinho = ttk.Combobox(edit_window)
+        combo_vinho['values'] = [str(vinho[0]) for vinho in listar_vinhos()]
+        combo_vinho.grid(row=0, column=1, padx=5, pady=5)
+        combo_vinho.set(extracao[1])
+        ttk.Label(edit_window, text="Data de Engarrafamento:", background="#4b2e2e").grid(row=1, column=0, padx=5, pady=5)
+        entry_data_enga = DateEntry(edit_window, date_pattern='dd/mm/yyyy')
+        entry_data_enga.grid(row=1, column=1, padx=5, pady=5)
+        entry_data_enga.set_date(datetime.datetime.strptime(extracao[2], '%d/%m/%Y'))
+        ttk.Label(edit_window, text="Dias para Extração:", background="#4b2e2e").grid(row=2, column=0, padx=5, pady=5)
+        entry_dias_enga = ttk.Entry(edit_window)
+        entry_dias_enga.grid(row=2, column=1, padx=5, pady=5)
+        entry_dias_enga.insert(0, extracao[3])
+        ttk.Label(edit_window, text="Data de Extração:", background="#4b2e2e").grid(row=3, column=0, padx=5, pady=5)
+        entry_data_extra = ttk.Entry(edit_window)
+        entry_data_extra.grid(row=3, column=1, padx=5, pady=5)
+        entry_data_extra.insert(0, extracao[4])
+
+        def salvar_extracao_editada():
+            novo_vinho_id = combo_vinho.get()
+            nova_data_enga = entry_data_enga.get()
+            novos_dias_enga = entry_dias_enga.get()
+            nova_data_extra = entry_data_extra.get()
+            if novo_vinho_id and nova_data_enga and novos_dias_enga and nova_data_extra:
+                conn = get_db_connection()
+                if conn is None:
+                    messagebox.showerror("Erro", "Não foi possível conectar ao banco de dados!")
+                    return
+                cursor = conn.cursor()
+                cursor.execute(
+                    "UPDATE extracao SET vinho_id=%s, data_engarrafamento=%s, dias_engarrafamento=%s, data_extracao=%s WHERE id=%s",
+                    (novo_vinho_id, nova_data_enga, novos_dias_enga, nova_data_extra, extracao_id)
+                )
+                conn.commit()
+                conn.close()
+                atualizar_lista_extracoes()
+                edit_window.destroy()
+            else:
+                messagebox.showwarning("Atenção", "Preencha todos os campos!")
+
+        ttk.Button(edit_window, text="Aplicar Mudanças", command=salvar_extracao_editada).grid(row=4, column=0, columnspan=2, pady=10)
+
+    ttk.Button(tab_extracao, text="Editar Extração", command=editar_extracao_callback).pack(pady=5)
+    ttk.Button(tab_extracao, text="Remover Extração", command=remover_extracao_callback).pack(pady=5)
+
     tab_control.pack(expand=True, fill=tk.BOTH)
-    atualizar_lista_clientes()
-    atualizar_lista_vinhos()
-    atualizar_lista_pedidos()
+    # Criando a função para atualizar todas as abas
+    def atualizar_todas_as_listas():
+        atualizar_lista_clientes()
+        atualizar_lista_vinhos()
+        atualizar_lista_pedidos()
+        atualizar_lista_extracoes()
+
+    # Função que detecta a mudança de aba e atualiza os dados
+    def on_tab_selected(event):
+        atualizar_todas_as_listas()
+
+    # Associando o evento de mudança de aba
+    tab_control.bind("<<NotebookTabChanged>>", on_tab_selected)
+
+    tab_control.pack(expand=True, fill=tk.BOTH)
+
+    # Garantindo que os dados sejam carregados na primeira execução
+    atualizar_todas_as_listas()
     atualizar_combobox_pedidos()
     app.mainloop()
 
